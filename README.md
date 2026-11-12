@@ -49,7 +49,7 @@ cat · dog · not(cat과 dog가 아닌 나머지 이미지) 3클래스 이미지
 
 ## 3. 실험 과정
 
-### 시스템 아키텍처
+### 3.1 시스템 아키텍처
 
 <img width="600" alt="fig01_system_architecture" src="https://github.com/user-attachments/assets/6fe83a5f-dcd2-4491-a46a-7530b22ccaf8" />
 
@@ -65,7 +65,7 @@ cat · dog · not(cat과 dog가 아닌 나머지 이미지) 3클래스 이미지
 
 학습이 계획대로 됐는지는 학습 검증 250개 항목(arm 간 step 수 · 학습 이미지 수 일치, 모든 epoch의 증강 계획 재계산 일치, 최종 가중치 해시 등)으로 확인했고, 모두 통과했습니다.
 
-### 3.1 진단과 T 처방
+### 3.2 진단과 T 처방
 
 진단은 동물↔not 4방향(cat→not · dog→not · not→cat · not→dog)만 봤습니다. cat↔dog 방향은 이 실험이 다루는 동물–not 경계가 아니어서, T가 겨냥하지 않는 대조 방향(H2)으로 남겼습니다.
 
@@ -92,7 +92,7 @@ cat · dog · not(cat과 dog가 아닌 나머지 이미지) 3클래스 이미지
 - 규칙 A는 확신도 0.9 이상 비율이 0~0.3%라 세 난이도 모두에서 켜졌습니다.
 - 백본 후보는 ResNet18 · ResNet50 [[16]](#ref-16) · EfficientNet-B0 [[17]](#ref-17)으로 미리 정했습니다. 규칙 D가 켜진 HARD에서만 top-1이 가장 높은 EfficientNet-B0(77.692 > ResNet50 76.130 > ResNet18 69.758 [[2]](#ref-2))로 바뀌었습니다.
 
-### 3.2 U 처방
+### 3.3 U 처방
 
 U는 정확도 · macro-F1 · 클래스별 precision · recall · 과적합 · 흔들림만 입력으로 받습니다. 방향별 오류가 들어오면 `ControlFailure`로 멈추게 해, U가 진단 정보를 쓰지 못하게 막았습니다. baseline validation 정확도가 EASY 0.951 → HARD 0.845로 0.107 떨어지고 과적합 · 흔들림도 기준을 넘어, 아래 세 트리거가 모두 켜졌습니다. 그래서 세 난이도에 같은 처방이 적용됐습니다.
 
@@ -102,7 +102,7 @@ U는 정확도 · macro-F1 · 클래스별 precision · recall · 과적합 · �
 | regularize | 과적합 ≥ 0.03 | RandAugment(2, 9) + 무작위 짝 CutMix · MixUp + Random Erasing 0.25 | ImageNet 학습에서 널리 쓰는 강한 증강 묶음. 구성과 Random Erasing 0.25는 DeiT 레시피 [[18]](#ref-18), RandAugment 값은 논문이 ImageNet ResNet-50에 쓴 N = 2, M = 9 [[19]](#ref-19) |
 | stabilize | 흔들림 ≥ 0.0025 | EMA | T의 규칙 E와 같음 [[15]](#ref-15) |
 
-### 3.3 T와 U 처방 정리
+### 3.4 T와 U 처방 정리
 
 | | T (진단 기반) | U (일괄 확대) |
 |---|---|---|
@@ -113,14 +113,14 @@ U는 정확도 · macro-F1 · 클래스별 precision · recall · 과적합 · �
 
 CutMix · MixUp은 두 방법 모두 배치의 50%에만 적용했고 α(CutMix 1.0, MixUp 0.4)도 같게 맞춰, 짝을 짓는 방식만 다르게 했습니다. 그래서 HARD에서 두 처방의 실제 차이는 Random Erasing 확률, RandAugment 유무, 짝 방식 세 가지입니다.
 
-### 3.4 같은 조건 맞추기
+### 3.5 같은 조건 맞추기
 
 - **학습 레시피**: AdamW(lr 2e-4, weight decay 0.01), 3 epoch warm-up 후 cosine 감소, label smoothing 0.1, 배치 64 등은 모든 arm에 같게 고정했습니다. 처방 외 조건을 고정하는 것이 목적이라 arm별로 따로 조정하지 않았고(학습률만 아래처럼 따로 점검), 사전등록 직전에 `control_table()`로 T와 U의 고정 조건이 같은지 확인했습니다.
 - **epoch 60, 조기 종료 없음**: arm마다 멈추는 시점이 다르면 학습량이 달라져 처방 효과와 학습량 효과가 섞이고, lockstep 학습은 모든 arm이 같은 step을 밟는 것을 전제로 합니다. 그래서 모든 arm을 60 epoch 학습하고 마지막 가중치로 평가했습니다. epoch 수는 학습량이 가장 적은 조건에서도 충분하도록 epoch당 step이 가장 적은 HARD에서 정했습니다. {40, 60, 80}을 학습해 보고, 더 길게 학습해도 겨냥 방향 오류(margin의 절반인 6.43/1,000 이내) · macro-F1(0.005 이내) · T − U 차이가 거의 변하지 않는 가장 짧은 값으로 골랐습니다. 확증 모델 80개 중 75개는 마지막 12 epoch 동안 허용오차 넘게 개선되지 않았습니다(나머지 5개 중 4개는 baseline).
 - **학습률**: 공통 학습률 2e-4가 한쪽 방법에만 맞는 값일 수 있어, HARD에서 T와 U 각각 {1e-4, 2e-4, 4e-4} 중 validation macro-F1이 가장 높은 값을 골랐습니다(T 2e-4, U 1e-4). U를 1e-4로 학습한 Ustar와의 비교가 H10입니다.
 - **seed 분리**: epoch과 학습률은 확증 seed(42~46)와 다른 seed(40 · 41)로 골라, 선택에 쓴 학습 결과가 확증 비교에 섞이지 않게 했습니다.
 
-### 3.5 원인 분리 (HARD)
+### 3.6 원인 분리 (HARD)
 
 T와 U는 백본과 증강이 함께 다르기 때문에 T − U만으로는 차이의 원인을 알 수 없습니다. 원인 분리 가설(H4~H10)은 HARD에서 검정하도록 미리 정했습니다. HARD는 규칙 D로 T의 백본까지 바뀌어 백본과 처방이 가장 크게 얽히고, 4방향이 모두 target이라 진단의 역할도 가장 큰 난이도이기 때문입니다.
 
@@ -132,7 +132,7 @@ H4 백본 주효과 = ½(T + U@EffB0) − ½(T@R50 + U)
 H5 처방 주효과 = ½(T + T@R50)   − ½(U@EffB0 + U)
 ```
 
-### 3.6 판정 기준
+### 3.7 판정 기준
 
 | 항목 | 방법 | 근거 |
 |---|---|---|
