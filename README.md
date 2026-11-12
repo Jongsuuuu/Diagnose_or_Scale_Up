@@ -1,7 +1,7 @@
 # Diagnose or Scale Up?
-### 오류 방향을 진단해 고칠 것인가, 모델과 증강을 한꺼번에 키울 것인가
+### 오류 방향을 진단해 그 경계만 고칠 것인가, 모델과 증강을 일괄로 키울 것인가
 
-cat · dog · not(고양이도 개도 아닌 이미지) 3클래스 이미지 분류에서 모델을 개선하는 두 방법을 같은 조건에서 비교한 실험입니다.
+cat · dog · not(cat과 dog가 아닌 나머지 이미지) 3클래스 이미지 분류에서 모델을 개선하는 두 방법을 같은 조건에서 비교한 실험입니다.
 
 - **T (Targeted)**: 모델이 어느 방향으로 틀리는지(예: 고양이를 not으로 놓침) 먼저 진단하고, 그 경계를 겨냥해 백본과 증강을 고릅니다.
 - **U (Uniform)**: 정확도 같은 집계 지표만 보고 더 큰 모델과 더 강한 증강을 한꺼번에 적용합니다.
@@ -27,9 +27,9 @@ cat · dog · not(고양이도 개도 아닌 이미지) 3클래스 이미지 분
 
 ## 2. 데이터
 
-CIFAR-10의 cat · dog와 CIFAR-100 이미지(not)로 만들었습니다 [1]. not은 cat · dog와의 시각적 유사도에 따라 세 난이도로 나눴고(CIFAR-100 클래스 기준 EASY 50 · MID 27 · HARD 22개 분량), cat · dog(train 5,000 / test 1,000장씩)는 세 난이도에 같은 파일을 썼습니다. 난이도를 나눈 것은 not이 동물과 얼마나 닮았는지에 따라 진단 처방의 효과가 달라지는지 보기 위해서입니다.
+**CIFAR-10의 cat · dog**와 **CIFAR-100의 not**(cat과 dog가 아닌 나머지 이미지)으로 만들었습니다 [[1]](#ref-1). **not은 cat · dog와의 시각적 유사도에 따라 세 난이도로 나눴고**(CIFAR-100 클래스 기준 EASY 50 · MID 27 · HARD 22개 분량), cat · dog(train 5,000 / test 1,000장씩)는 세 난이도에 같은 파일을 썼습니다. 난이도를 나눈 것은 not이 동물과 얼마나 닮았는지에 따라 진단 처방의 효과가 달라지는지 보기 위해서 입니다.
 
-이미지는 모두 32×32입니다. 사전학습 가중치(torchvision `IMAGENET1K_V1`)가 224×224 입력을 기준으로 만들어져 있어 [2] 224×224로 확대해 학습했습니다.
+이미지는 모두 32×32입니다. 사전학습 가중치(torchvision `IMAGENET1K_V1`)가 224×224 입력을 기준으로 만들어져 있어 [[2]](#ref-2) 224×224로 확대해 학습했습니다.
 
 | 난이도 | not (train / test) | 분할 후 train / val / test | test의 not 비율 |
 |---|---|---|---:|
@@ -39,24 +39,29 @@ CIFAR-10의 cat · dog와 CIFAR-100 이미지(not)로 만들었습니다 [1]. no
 
 **중복 검사와 분할**
 
-- CIFAR-10 test 이미지의 3.3%, CIFAR-100 test 이미지의 10%는 train에 준중복 이미지가 있다고 보고됐습니다 [3]. 그래서 분할 전에 MD5로 정확 중복을, dHash [4]로 준중복(64비트 해밍 거리 ≤ 4 **그리고** 256비트 ≤ 32)을 찾았습니다. 두 해시가 모두 가까울 때만 준중복으로 봐 오탐을 줄였습니다.
-- test와 겹친 train 이미지와 그 그룹, 라벨이 섞인 그룹은 train에서 뺐습니다(EASY 251 · MID 45 · HARD 41장, 난이도별 train 폴더의 0.2~0.7%).
+- CIFAR-10 test 이미지의 3.3%, CIFAR-100 test 이미지의 10%는 train에 준중복 이미지가 있습니다 [[3]](#ref-3). 그래서 분할 전에 MD5로 **정확 중복**을, dHash [[4]](#ref-4)로 **준중복**(**64비트 해밍 거리 ≤ 4** 그리고 **256비트 ≤ 32**)을 찾았습니다. 두 해시가 모두 가까울 때만 준중복으로 봐 오탐을 줄였습니다.
+- test와 겹친 train 이미지와 그 그룹, 라벨이 섞인 그룹은 train에서 뺐습니다. (EASY 251 · MID 45 · HARD 41장, 난이도별 train 폴더의 0.2~0.7%).
 - **test는 한 장도 빼지 않았습니다.** 겹친 쌍 중 한쪽만 빼도 누수를 막을 수 있으므로, 평가 기준인 test 대신 train 쪽을 뺐습니다. 덕분에 원본 test 이미지가 그대로 남았고, 세 난이도가 같은 동물 test 2,000장을 공유해 난이도 간 비교 기준도 유지됐습니다.
-- validation은 준중복 그룹 단위로 나눴습니다. 같은 이미지의 사본이 train과 validation에 갈라지면 validation 성능이 부풀어 [5], validation으로 하는 진단과 epoch · 학습률 선택이 함께 왜곡되기 때문입니다.
-- not이 다수 클래스라 클래스 가중치 `w_c = N / (K · N_c)`를 썼습니다(scikit-learn `'balanced'`와 같은 식 [6], HARD 1.40 / 1.40 / 0.64).
+- **validation(train의 20%)은 이미지 한 장씩이 아니라 준중복 그룹 단위로 나눴습니다.** 같은 이미지의 사본이 train과 validation에 갈라지면 모델이 학습 때 본 이미지를 validation에서 다시 맞히는 셈이라 validation 성능이 실제보다 높게 나오고 [[5]](#ref-5), validation으로 하는 진단과 epoch · 학습률 선택이 함께 왜곡되기 때문입니다.
+- **not 이미지가 cat · dog보다 2배 이상 많아**(HARD train not 8,777장, cat · dog 각각 약 4,000장), 그대로 학습하면 **애매한 이미지를 not으로 판단하는 쪽으로 치우치기 쉽습니다.** 그래서 장수가 적은 클래스일수록 한 장의 손실을 더 크게 반영하는 클래스 가중치 `w_c = N / (K · N_c)`를 썼습니다(scikit-learn 'balanced'와 같은 식 [[6]](#ref-6)). HARD에서는 cat · dog 1.40, not 0.64로, 세 클래스가 손실에서 같은 몫(가중치 × 장수)을 갖습니다.
 
 ---
 
 ## 3. 실험 과정
 
-![시스템 아키텍처](images/fig01_system_architecture.png)
+### 시스템 아키텍처
 
-| 단계 | 한 일 | 이렇게 한 이유 |
-|---|---|---|
-| ① 진단 | ResNet18 baseline(B, seed 42 · 43 · 44)의 **validation** 예측으로 방향별 오류율을 구하고 규칙 A~E 적용 | test는 확증 판정에만 쓰려고 진단에 쓰지 않았습니다. seed 3개의 예측을 합쳐, 2% 기준(3.1) 근처에서 판정이 seed마다 달라지지 않게 했습니다 |
-| ② 처방 · 사전등록 | T · U 처방 설계, epoch과 학습률 선택(validation), 가설 · 대비 · 판정 규칙을 SHA-256으로 잠근 뒤 확증 학습 시작 | 결과를 본 뒤 분석 방법을 고르면, 결과에 끼워 맞춘 해석도 미리 예측한 것처럼 보이게 됩니다 [7]. 잠근 뒤 내용이 바뀌면 해시가 맞지 않아 다음 단계가 멈춥니다 |
-| ③ 확증 학습 | 판정에 쓰는 본 학습입니다. 같은 난이도 · seed의 모든 학습 조건(arm)을 같은 배치 순서 · 같은 증강 난수로 함께 학습(lockstep). seed 42~46 × 60 epoch, 모델 80개 | 배치 순서나 증강 난수만 달라져도 결과가 흔들립니다 [8]. 같은 난수를 공유하면 두 arm의 결과가 함께 움직이는 만큼 차이의 분산이 줄어듭니다 [9]. 백본이 다르면 학습 경로가 갈라지므로, 남는 변동은 seed 5개로 추정했습니다 |
-| ④ 판정 | test를 한 번만 열어 예측을 잠그고, 사전등록 규칙으로 자동 판정 | 같은 test를 보며 여러 번 고치면 test에 과적합됩니다 [10]. 그래서 test는 한 번만 열 수 있는 보관소(vault)에 잠가 두었습니다 |
+<img width="600" alt="fig01_system_architecture" src="https://github.com/user-attachments/assets/6fe83a5f-dcd2-4491-a46a-7530b22ccaf8" />
+
+※ 시스템 아키텍처 시각화에는 Claude 기반 이미지 생성 기능을 활용했습니다.
+
+
+| 단계별 진행 | 설계 이유 |
+|---|---|
+| **① 진단**<br>ResNet18 baseline(B, seed 42 · 43 · 44)의 **validation** 예측으로 방향별 오류율을 구하고 규칙 A~E 적용 | test는 확증 판정에만 쓰려고 진단에 쓰지 않았습니다. seed 3개의 예측을 합쳐, 2% 기준(3.1) 근처에서 판정이 seed마다 달라지지 않게 했습니다 |
+| **② 처방 · 사전등록**<br>T · U 처방 설계, epoch과 학습률 선택(validation), 가설 · 대비 · 판정 규칙을 SHA-256으로 잠근 뒤 확증 학습 시작 | 결과를 본 뒤 분석 방법을 고르면, 결과에 끼워 맞춘 해석도 미리 예측한 것처럼 보이게 됩니다 [[7]](#ref-7). 잠근 뒤 내용이 바뀌면 해시가 맞지 않아 다음 단계가 멈춥니다 |
+| **③ 확증 학습**<br>판정에 쓰는 본 학습입니다. 같은 난이도 · seed의 모든 학습 조건(arm)을 같은 배치 순서 · 같은 증강 난수로 함께 학습(lockstep). seed 42~46 × 60 epoch, 모델 80개 | 배치 순서나 증강 난수만 달라져도 결과가 흔들립니다 [[8]](#ref-8). 같은 난수를 공유하면 두 arm의 결과가 함께 움직이는 만큼 차이의 분산이 줄어듭니다 [[9]](#ref-9). 백본이 다르면 학습 경로가 갈라지므로, 남는 변동은 seed 5개로 추정했습니다 |
+| **④ 판정**<br>test를 한 번만 열어 예측을 잠그고, 사전등록 규칙으로 자동 판정 | 같은 test를 보며 여러 번 고치면 test에 과적합됩니다 [[10]](#ref-10). 그래서 test는 한 번만 열 수 있는 보관소(vault)에 잠가 두었습니다 |
 
 학습이 계획대로 됐는지는 학습 검증 250개 항목(arm 간 step 수 · 학습 이미지 수 일치, 모든 epoch의 증강 계획 재계산 일치, 최종 가중치 해시 등)으로 확인했고, 모두 통과했습니다.
 
@@ -67,11 +72,11 @@ CIFAR-10의 cat · dog와 CIFAR-100 이미지(not)로 만들었습니다 [1]. no
 | 규칙 | 조건 (validation) | 켜지는 처방 | 근거 |
 |---|---|---|---|
 | target | 오류율 ≥ 2%인 방향 | 겨냥 방향 · 진단 쌍 짝(cat↔not, dog↔not) | 오류가 실제로 몰린 방향만 겨냥하기 위한 문턱. 문턱 근처 판정이 seed에 흔들리지 않도록 seed 3개의 예측을 합쳐 계산 |
-| A | 동물→not 오류 중 확신도 ≥ 0.9인 비율 ≤ 10% | Random Erasing p 0.5 | 놓친 동물 이미지를 대부분 낮은 확신도로 틀렸다면 가려지거나 일부만 보인 경우일 수 있다고 보고, 일부를 지운 이미지로 학습해 가림에 강해지게 함. p · 면적(2~40%) · 종횡비(0.3~3.3)는 논문 기본값 [11] |
-| B | 과적합(train − val 정확도) ≥ 0.03 | CutMix (α 1.0) | 과적합을 줄이는 정규화. α = 1은 논문의 모든 실험에서 쓴 값 [12] |
-| C | not→동물 방향도 target | MixUp (α 0.4) | 동물과 not을 양쪽 방향으로 헷갈리는 경우로 보고, 두 클래스 이미지를 섞어 그 사이를 매끄럽게 학습시킴. α는 ImageNet에서 이득이 확인된 0.1~0.4 범위의 상한 [13] |
-| D | 4방향 모두 target이고, not 로짓에 상수를 더해 임계값을 옮겨도 macro-F1 이득 ≤ 0.002 | 후보 중 ImageNet top-1이 가장 높은 백본 | 임계값 조정으로 풀리지 않으면 모델이 두 클래스를 구분할 특징을 충분히 뽑지 못하는 것으로 보고 백본을 바꿈. ImageNet 정확도가 높은 모델일수록 파인튜닝 성능도 높음(CIFAR-10/100 포함 12개 데이터셋, r = 0.96) [14] |
-| E | val 정확도의 epoch 간 변화량 중앙값 ≥ 0.0025 | EMA (decay 0.999) | 가중치 평균으로 학습 잡음을 줄임 [15] |
+| A | 동물→not 오류 중 확신도 ≥ 0.9인 비율 ≤ 10% | Random Erasing p 0.5 | 놓친 동물 이미지를 대부분 낮은 확신도로 틀렸다면 가려지거나 일부만 보인 경우일 수 있다고 보고, 일부를 지운 이미지로 학습해 가림에 강해지게 함. p · 면적(2~40%) · 종횡비(0.3~3.3)는 논문 기본값 [[11]](#ref-11) |
+| B | 과적합(train − val 정확도) ≥ 0.03 | CutMix (α 1.0) | 과적합을 줄이는 정규화. α = 1은 논문의 모든 실험에서 쓴 값 [[12]](#ref-12) |
+| C | not→동물 방향도 target | MixUp (α 0.4) | 동물과 not을 양쪽 방향으로 헷갈리는 경우로 보고, 두 클래스 이미지를 섞어 그 사이를 매끄럽게 학습시킴. α는 ImageNet에서 이득이 확인된 0.1~0.4 범위의 상한 [[13]](#ref-13) |
+| D | 4방향 모두 target이고, not 로짓에 상수를 더해 임계값을 옮겨도 macro-F1 이득 ≤ 0.002 | 후보 중 ImageNet top-1이 가장 높은 백본 | 임계값 조정으로 풀리지 않으면 모델이 두 클래스를 구분할 특징을 충분히 뽑지 못하는 것으로 보고 백본을 바꿈. ImageNet 정확도가 높은 모델일수록 파인튜닝 성능도 높음(CIFAR-10/100 포함 12개 데이터셋, r = 0.96) [[14]](#ref-14) |
+| E | val 정확도의 epoch 간 변화량 중앙값 ≥ 0.0025 | EMA (decay 0.999) | 가중치 평균으로 학습 잡음을 줄임 [[15]](#ref-15) |
 
 규칙과 임계값은 모두 진단 전에 프로토콜에 적어 잠갔습니다(`01_protocol_lock`). 진단 결과를 본 뒤 규칙을 바꾸면 해시가 맞지 않아 다음 단계가 멈추고, 같은 진단 수치를 넣으면 항상 같은 처방이 나옵니다.
 
@@ -85,7 +90,7 @@ CIFAR-10의 cat · dog와 CIFAR-100 이미지(not)로 만들었습니다 [1]. no
 
 - 문턱에 가장 가까운 방향은 MID not→dog(1.8%)였고, 이 방향은 target에서 빠졌습니다.
 - 규칙 A는 확신도 0.9 이상 비율이 0~0.3%라 세 난이도 모두에서 켜졌습니다.
-- 백본 후보는 ResNet18 · ResNet50 [16] · EfficientNet-B0 [17]으로 미리 정했습니다. 규칙 D가 켜진 HARD에서만 top-1이 가장 높은 EfficientNet-B0(77.692 > ResNet50 76.130 > ResNet18 69.758 [2])로 바뀌었습니다.
+- 백본 후보는 ResNet18 · ResNet50 [[16]](#ref-16) · EfficientNet-B0 [[17]](#ref-17)으로 미리 정했습니다. 규칙 D가 켜진 HARD에서만 top-1이 가장 높은 EfficientNet-B0(77.692 > ResNet50 76.130 > ResNet18 69.758 [[2]](#ref-2))로 바뀌었습니다.
 
 ### 3.2 U 처방
 
@@ -93,9 +98,9 @@ U는 정확도 · macro-F1 · 클래스별 precision · recall · 과적합 · �
 
 | 트리거 | 조건 | 처방 | 근거 |
 |---|---|---|---|
-| capacity | EASY→HARD 정확도 하락 ≥ 0.03 또는 macro-F1 < 0.90 | ResNet50 | ResNet18을 같은 계열의 더 깊은 모델로 키우는 것은 가장 흔한 확대 방식 [17] (ImageNet 분류기 포함 파라미터 11.7M → 25.6M [2]) |
-| regularize | 과적합 ≥ 0.03 | RandAugment(2, 9) + 무작위 짝 CutMix · MixUp + Random Erasing 0.25 | ImageNet 학습에서 널리 쓰는 강한 증강 묶음. 구성과 Random Erasing 0.25는 DeiT 레시피 [18], RandAugment 값은 논문이 ImageNet ResNet-50에 쓴 N = 2, M = 9 [19] |
-| stabilize | 흔들림 ≥ 0.0025 | EMA | T의 규칙 E와 같음 [15] |
+| capacity | EASY→HARD 정확도 하락 ≥ 0.03 또는 macro-F1 < 0.90 | ResNet50 | ResNet18을 같은 계열의 더 깊은 모델로 키우는 것은 가장 흔한 확대 방식 [[17]](#ref-17) (ImageNet 분류기 포함 파라미터 11.7M → 25.6M [[2]](#ref-2)) |
+| regularize | 과적합 ≥ 0.03 | RandAugment(2, 9) + 무작위 짝 CutMix · MixUp + Random Erasing 0.25 | ImageNet 학습에서 널리 쓰는 강한 증강 묶음. 구성과 Random Erasing 0.25는 DeiT 레시피 [[18]](#ref-18), RandAugment 값은 논문이 ImageNet ResNet-50에 쓴 N = 2, M = 9 [[19]](#ref-19) |
+| stabilize | 흔들림 ≥ 0.0025 | EMA | T의 규칙 E와 같음 [[15]](#ref-15) |
 
 ### 3.3 T와 U 처방 정리
 
@@ -131,11 +136,11 @@ H5 처방 주효과 = ½(T + T@R50)   − ½(U@EffB0 + U)
 
 | 항목 | 방법 | 근거 |
 |---|---|---|
-| 95% 구간 | seed 간 분산 + test 이미지 bootstrap(10,000회) 분산을 합친 hybrid 구간, Welch 자유도 | 학습 난수와 평가 데이터 표본이 모두 결과를 흔드는 변동 요인이라 둘 다 반영했습니다 [8]. seed가 3개면 구간이 지나치게 넓어져 5개로 했습니다(seed 성분 자유도 2 → 4) |
-| 다중 비교 | Holm 보정 (family: H1 세 난이도 · H2 세 난이도 · 확증 가설 H4 · H5 · H7 · H8 · H9 · H10) | 가설이 여러 개라, family 안에서 하나라도 우연히 유의하게 나올 확률을 0.05 이하로 묶었습니다. Holm은 Bonferroni와 같은 보장을 주면서 검정력은 같거나 높습니다 [20] |
-| margin (실질적 차이 기준) | baseline validation 오류의 10%, 최소 1/1,000 (겨냥 방향 EASY 1.65 · MID 5.63 · **HARD 12.86**) | 의미 있게 볼 최소 효과 크기는 데이터를 보기 전에 정해야 해서 [21] 프로토콜에 고정했습니다. 겨냥 방향 baseline 오류가 EASY 16.5, HARD 128.6/1,000으로 약 8배 차이가 나서 고정값 대신 비례값으로 잡았습니다. 10%라는 비율 자체는 사전에 정한 선택값입니다(민감도는 6장) |
-| 실질적 동등 (TOST) | 90% 구간이 ±margin 안에 들면 동등 | "유의하지 않음"은 "같음"이 아니므로, 90% 구간이 ±margin 안에 들 때만 실질적 동등으로 판정했습니다. 이 조건은 α = 0.05의 두 단측 검정(TOST)을 모두 통과하는 것과 같습니다 [21, 22] |
-| 특이성 (H2) | 겨냥 방향 차이에서 대조 방향(cat↔dog) 차이를 뺀 값(DiD, 차이의 차이)을 직접 검정 | "겨냥 방향은 유의, 대조 방향은 비유의"만으로는 두 방향이 다르다고 말할 수 없습니다 [23] |
+| 95% 구간 | seed 간 분산 + test 이미지 bootstrap(10,000회) 분산을 합친 hybrid 구간, Welch 자유도 | 학습 난수와 평가 데이터 표본이 모두 결과를 흔드는 변동 요인이라 둘 다 반영했습니다 [[8]](#ref-8). seed가 3개면 구간이 지나치게 넓어져 5개로 했습니다(seed 성분 자유도 2 → 4) |
+| 다중 비교 | Holm 보정 (family: H1 세 난이도 · H2 세 난이도 · 확증 가설 H4 · H5 · H7 · H8 · H9 · H10) | 가설이 여러 개라, family 안에서 하나라도 우연히 유의하게 나올 확률을 0.05 이하로 묶었습니다. Holm은 Bonferroni와 같은 보장을 주면서 검정력은 같거나 높습니다 [[20]](#ref-20) |
+| margin (실질적 차이 기준) | baseline validation 오류의 10%, 최소 1/1,000 (겨냥 방향 EASY 1.65 · MID 5.63 · **HARD 12.86**) | 의미 있게 볼 최소 효과 크기는 데이터를 보기 전에 정해야 해서 [[21]](#ref-21) 프로토콜에 고정했습니다. 겨냥 방향 baseline 오류가 EASY 16.5, HARD 128.6/1,000으로 약 8배 차이가 나서 고정값 대신 비례값으로 잡았습니다. 10%라는 비율 자체는 사전에 정한 선택값입니다(민감도는 6장) |
+| 실질적 동등 (TOST) | 90% 구간이 ±margin 안에 들면 동등 | "유의하지 않음"은 "같음"이 아니므로, 90% 구간이 ±margin 안에 들 때만 실질적 동등으로 판정했습니다. 이 조건은 α = 0.05의 두 단측 검정(TOST)을 모두 통과하는 것과 같습니다 [[21]](#ref-21)[[22]](#ref-22) |
+| 특이성 (H2) | 겨냥 방향 차이에서 대조 방향(cat↔dog) 차이를 뺀 값(DiD, 차이의 차이)을 직접 검정 | "겨냥 방향은 유의, 대조 방향은 비유의"만으로는 두 방향이 다르다고 말할 수 없습니다 [[23]](#ref-23) |
 
 판정은 네 가지입니다. **지지** = Holm p ≤ 0.05이고 95% 상한 < 0(상한 < −margin이면 "실질적 크기") · **반대 방향** = Holm p ≤ 0.05이고 추정치 > 0 · **실질적 동등** = 90% 구간이 ±margin 안 · **결론 유보** = 어느 쪽에도 해당하지 않음.
 
@@ -188,7 +193,7 @@ H5 처방 주효과 = ½(T + T@R50)   − ½(U@EffB0 + U)
 - **학습률 2e-4 조건에서 차이는 대부분 백본에서 나왔습니다.** T − U(−18.62)를 T 처방 기준으로 나누면 백본 교체분(T − T@R50)이 −22.10, 처방 차이분(T@R50 − U)이 +3.48입니다. U 처방 기준으로 나눠도 백본 −25.14, 처방 +6.52로 같은 결론입니다. fig02 (b)의 속이 빈 점이 이 분해이며, Holm 보정을 하지 않은 탐색 분석입니다.
 - **방향 맞춤 증강의 이득은 확인되지 않았습니다.** 세 백본 모두에서 T 처방이 U 처방보다 수치상 오히려 더 틀렸습니다(+2.95 · +3.48 · +6.52).
 - **클래스 가중치를 끄면 오류가 다른 방향으로 옮겨갔습니다.** not→cat 오류가 줄어든 만큼 cat→not 오류가 늘어, 전체 오류는 2.6%만 줄었습니다(H9).
-- HARD T는 U보다 파라미터가 약 5.5배 적고(3클래스 모델 기준 4.34M vs 24.03M) GFLOPs는 약 10배 적었지만(0.39 vs 4.09), 확률 보정 오차(ECE, 15구간 [24])는 0.167로 U(0.065)보다 컸습니다.
+- HARD T는 U보다 파라미터가 약 5.5배 적고(3클래스 모델 기준 4.34M vs 24.03M) GFLOPs는 약 10배 적었지만(0.39 vs 4.09), 확률 보정 오차(ECE, 15구간 [[24]](#ref-24))는 0.167로 U(0.065)보다 컸습니다.
 
 ---
 
@@ -259,27 +264,27 @@ T와 U만 비교했다면 이 결과를 "방향 맞춤 증강이 효과가 있�
 ---
 
 ## 참고 문헌
-1. Krizhevsky, A. (2009). *Learning Multiple Layers of Features from Tiny Images* (CIFAR-10/100 기술 보고서). [cs.toronto.edu/~kriz/cifar.html](https://www.cs.toronto.edu/~kriz/cifar.html)
-2. PyTorch. *torchvision — Models and pre-trained weights* (ImageNet top-1 · 파라미터 수 · GFLOPs · 입력 전처리). [docs.pytorch.org/vision/stable/models.html](https://docs.pytorch.org/vision/stable/models.html)
-3. Barz, B., Denzler, J. (2020). Do We Train on Test Data? Purging CIFAR of Near-Duplicates. *Journal of Imaging*, 6(6), 41. [doi:10.3390/jimaging6060041](https://doi.org/10.3390/jimaging6060041)
-4. Krawetz, N. (2013). Kind of Like That (dHash). *The Hacker Factor Blog*. [hackerfactor.com](https://www.hackerfactor.com/blog/index.php?/archives/529-Kind-of-Like-That.html)
-5. Kapoor, S., Narayanan, A. (2023). Leakage and the Reproducibility Crisis in Machine-Learning-Based Science. *Patterns*, 4(9), 100804. [doi:10.1016/j.patter.2023.100804](https://doi.org/10.1016/j.patter.2023.100804)
-6. scikit-learn. `sklearn.utils.class_weight.compute_class_weight` (`'balanced'`). [scikit-learn.org](https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html)
-7. Nosek, B. A., Ebersole, C. R., DeHaven, A. C., Mellor, D. T. (2018). The Preregistration Revolution. *PNAS*, 115(11), 2600–2606. [doi:10.1073/pnas.1708274114](https://doi.org/10.1073/pnas.1708274114)
-8. Bouthillier, X. et al. (2021). Accounting for Variance in Machine Learning Benchmarks. *MLSys*. [arXiv:2103.03098](https://arxiv.org/abs/2103.03098)
-9. Glasserman, P., Yao, D. D. (1992). Some Guidelines and Guarantees for Common Random Numbers. *Management Science*, 38(6), 884–908. [doi:10.1287/mnsc.38.6.884](https://doi.org/10.1287/mnsc.38.6.884)
-10. Dwork, C. et al. (2015). The Reusable Holdout: Preserving Validity in Adaptive Data Analysis. *Science*, 349(6248), 636. [doi:10.1126/science.aaa9375](https://doi.org/10.1126/science.aaa9375)
-11. Zhong, Z. et al. (2020). Random Erasing Data Augmentation. *AAAI*. [arXiv:1708.04896](https://arxiv.org/abs/1708.04896)
-12. Yun, S. et al. (2019). CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Features. *ICCV*. [arXiv:1905.04899](https://arxiv.org/abs/1905.04899)
-13. Zhang, H., Cisse, M., Dauphin, Y. N., Lopez-Paz, D. (2018). mixup: Beyond Empirical Risk Minimization. *ICLR*. [arXiv:1710.09412](https://arxiv.org/abs/1710.09412)
-14. Kornblith, S., Shlens, J., Le, Q. V. (2019). Do Better ImageNet Models Transfer Better? *CVPR*. [arXiv:1805.08974](https://arxiv.org/abs/1805.08974)
-15. Morales-Brotons, D., Vogels, T., Hendrikx, H. (2024). Exponential Moving Average of Weights in Deep Learning: Dynamics and Benefits. *TMLR*. [arXiv:2411.18704](https://arxiv.org/abs/2411.18704)
-16. He, K., Zhang, X., Ren, S., Sun, J. (2016). Deep Residual Learning for Image Recognition. *CVPR*. [arXiv:1512.03385](https://arxiv.org/abs/1512.03385)
-17. Tan, M., Le, Q. V. (2019). EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. *ICML*. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
-18. Touvron, H. et al. (2021). Training Data-Efficient Image Transformers & Distillation through Attention. *ICML* (Table 9). [arXiv:2012.12877](https://arxiv.org/abs/2012.12877)
-19. Cubuk, E. D., Zoph, B., Shlens, J., Le, Q. V. (2020). RandAugment: Practical Automated Data Augmentation with a Reduced Search Space. *NeurIPS*. [arXiv:1909.13719](https://arxiv.org/abs/1909.13719)
-20. Holm, S. (1979). A Simple Sequentially Rejective Multiple Test Procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70. [JSTOR 4615733](https://www.jstor.org/stable/4615733)
-21. Lakens, D., Scheel, A. M., Isager, P. M. (2018). Equivalence Testing for Psychological Research: A Tutorial. *AMPPS*, 1(2). [doi:10.1177/2515245918770963](https://doi.org/10.1177/2515245918770963)
-22. Schuirmann, D. J. (1987). A Comparison of the Two One-Sided Tests Procedure and the Power Approach for Assessing the Equivalence of Average Bioavailability. *J. Pharmacokinetics and Biopharmaceutics*, 15(6), 657–680. [doi:10.1007/BF01068419](https://doi.org/10.1007/BF01068419)
-23. Gelman, A., Stern, H. (2006). The Difference Between "Significant" and "Not Significant" is not Itself Statistically Significant. *The American Statistician*, 60(4), 328–331. [doi:10.1198/000313006X152649](https://doi.org/10.1198/000313006X152649)
-24. Guo, C., Pleiss, G., Sun, Y., Weinberger, K. Q. (2017). On Calibration of Modern Neural Networks. *ICML*. [arXiv:1706.04599](https://arxiv.org/abs/1706.04599)
+1. <a id="ref-1"></a>Krizhevsky, A. (2009). *Learning Multiple Layers of Features from Tiny Images* (CIFAR-10/100 기술 보고서). [cs.toronto.edu/~kriz/cifar.html](https://www.cs.toronto.edu/~kriz/cifar.html)
+2. <a id="ref-2"></a>PyTorch. *torchvision — Models and pre-trained weights* (ImageNet top-1 · 파라미터 수 · GFLOPs · 입력 전처리). [docs.pytorch.org/vision/stable/models.html](https://docs.pytorch.org/vision/stable/models.html)
+3. <a id="ref-3"></a>Barz, B., Denzler, J. (2020). Do We Train on Test Data? Purging CIFAR of Near-Duplicates. *Journal of Imaging*, 6(6), 41. [doi:10.3390/jimaging6060041](https://doi.org/10.3390/jimaging6060041)
+4. <a id="ref-4"></a>Krawetz, N. (2013). Kind of Like That (dHash). *The Hacker Factor Blog*. [hackerfactor.com](https://www.hackerfactor.com/blog/index.php?/archives/529-Kind-of-Like-That.html)
+5. <a id="ref-5"></a>Kapoor, S., Narayanan, A. (2023). Leakage and the Reproducibility Crisis in Machine-Learning-Based Science. *Patterns*, 4(9), 100804. [doi:10.1016/j.patter.2023.100804](https://doi.org/10.1016/j.patter.2023.100804)
+6. <a id="ref-6"></a>scikit-learn. `sklearn.utils.class_weight.compute_class_weight` (`'balanced'`). [scikit-learn.org](https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_class_weight.html)
+7. <a id="ref-7"></a>Nosek, B. A., Ebersole, C. R., DeHaven, A. C., Mellor, D. T. (2018). The Preregistration Revolution. *PNAS*, 115(11), 2600–2606. [doi:10.1073/pnas.1708274114](https://doi.org/10.1073/pnas.1708274114)
+8. <a id="ref-8"></a>Bouthillier, X. et al. (2021). Accounting for Variance in Machine Learning Benchmarks. *MLSys*. [arXiv:2103.03098](https://arxiv.org/abs/2103.03098)
+9. <a id="ref-9"></a>Glasserman, P., Yao, D. D. (1992). Some Guidelines and Guarantees for Common Random Numbers. *Management Science*, 38(6), 884–908. [doi:10.1287/mnsc.38.6.884](https://doi.org/10.1287/mnsc.38.6.884)
+10. <a id="ref-10"></a>Dwork, C. et al. (2015). The Reusable Holdout: Preserving Validity in Adaptive Data Analysis. *Science*, 349(6248), 636. [doi:10.1126/science.aaa9375](https://doi.org/10.1126/science.aaa9375)
+11. <a id="ref-11"></a>Zhong, Z. et al. (2020). Random Erasing Data Augmentation. *AAAI*. [arXiv:1708.04896](https://arxiv.org/abs/1708.04896)
+12. <a id="ref-12"></a>Yun, S. et al. (2019). CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Features. *ICCV*. [arXiv:1905.04899](https://arxiv.org/abs/1905.04899)
+13. <a id="ref-13"></a>Zhang, H., Cisse, M., Dauphin, Y. N., Lopez-Paz, D. (2018). mixup: Beyond Empirical Risk Minimization. *ICLR*. [arXiv:1710.09412](https://arxiv.org/abs/1710.09412)
+14. <a id="ref-14"></a>Kornblith, S., Shlens, J., Le, Q. V. (2019). Do Better ImageNet Models Transfer Better? *CVPR*. [arXiv:1805.08974](https://arxiv.org/abs/1805.08974)
+15. <a id="ref-15"></a>Morales-Brotons, D., Vogels, T., Hendrikx, H. (2024). Exponential Moving Average of Weights in Deep Learning: Dynamics and Benefits. *TMLR*. [arXiv:2411.18704](https://arxiv.org/abs/2411.18704)
+16. <a id="ref-16"></a>He, K., Zhang, X., Ren, S., Sun, J. (2016). Deep Residual Learning for Image Recognition. *CVPR*. [arXiv:1512.03385](https://arxiv.org/abs/1512.03385)
+17. <a id="ref-17"></a>Tan, M., Le, Q. V. (2019). EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. *ICML*. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
+18. <a id="ref-18"></a>Touvron, H. et al. (2021). Training Data-Efficient Image Transformers & Distillation through Attention. *ICML* (Table 9). [arXiv:2012.12877](https://arxiv.org/abs/2012.12877)
+19. <a id="ref-19"></a>Cubuk, E. D., Zoph, B., Shlens, J., Le, Q. V. (2020). RandAugment: Practical Automated Data Augmentation with a Reduced Search Space. *NeurIPS*. [arXiv:1909.13719](https://arxiv.org/abs/1909.13719)
+20. <a id="ref-20"></a>Holm, S. (1979). A Simple Sequentially Rejective Multiple Test Procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70. [JSTOR 4615733](https://www.jstor.org/stable/4615733)
+21. <a id="ref-21"></a>Lakens, D., Scheel, A. M., Isager, P. M. (2018). Equivalence Testing for Psychological Research: A Tutorial. *AMPPS*, 1(2). [doi:10.1177/2515245918770963](https://doi.org/10.1177/2515245918770963)
+22. <a id="ref-22"></a>Schuirmann, D. J. (1987). A Comparison of the Two One-Sided Tests Procedure and the Power Approach for Assessing the Equivalence of Average Bioavailability. *J. Pharmacokinetics and Biopharmaceutics*, 15(6), 657–680. [doi:10.1007/BF01068419](https://doi.org/10.1007/BF01068419)
+23. <a id="ref-23"></a>Gelman, A., Stern, H. (2006). The Difference Between "Significant" and "Not Significant" is not Itself Statistically Significant. *The American Statistician*, 60(4), 328–331. [doi:10.1198/000313006X152649](https://doi.org/10.1198/000313006X152649)
+24. <a id="ref-24"></a>Guo, C., Pleiss, G., Sun, Y., Weinberger, K. Q. (2017). On Calibration of Modern Neural Networks. *ICML*. [arXiv:1706.04599](https://arxiv.org/abs/1706.04599)
