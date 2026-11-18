@@ -254,20 +254,24 @@ H5 처방 주효과 = ½(T + T@R50)   − ½(U@EffB0 + U)
 
 H2는 특이성 규칙(DiD + 대조 방향 동등)으로 판정했습니다. H3과 H9는 비열등성 규칙으로, 오류를 줄이면서 다른 클래스나 반대쪽 방향으로 옮기지 않았는지 확인했습니다. 
 
-<img width="700" alt="fig_verdict_rules" src="https://github.com/user-attachments/assets/89419fb2-dd5e-4a39-a3e3-35c558887c34" />
+<img width="700" alt="fig_verdict_rules (1)" src="https://github.com/user-attachments/assets/aa10857e-d625-45ab-b89f-dc07c71c781a" />
 
+---
+
+## 4. 결과
+
+### 핵심 결과 요약
+
+
+<img width="700" alt="fig02_summary_results (1)" src="https://github.com/user-attachments/assets/5743b100-d7fe-447a-8b31-cddef5346ca2" />
+
+**(a)** 난이도별 T − U (4.1), **(b)** HARD 원인 분리 (4.2). 
+
+점은 추정치, 선은 95% 구간, 회색 구간은 ±margin이며, 속이 빈 점은 Holm 보정을 하지 않은 탐색 분석입니다.
 
 ---
 
 📌
-## 4. 결과
-
-<img width="700" alt="fig02_summary_results" src="https://github.com/user-attachments/assets/78a758d3-bb68-4a98-9533-9898564ed30d" />
-
-**그림 2.** (a) 난이도별 T − U (4.1), (b) HARD 원인 분리 (4.2). 점은 추정치, 선은 95% 구간, 회색 띠는 ±margin이며, 속이 빈 점은 Holm 보정을 하지 않은 탐색 분석입니다.
-
----
-
 ### 4.1 T와 U 비교
 
 먼저 난이도별 실제 성능입니다.
