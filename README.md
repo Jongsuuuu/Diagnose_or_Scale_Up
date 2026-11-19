@@ -302,6 +302,8 @@ H2는 특이성 규칙(DiD + 대조 방향 동등)으로 판정했습니다. H3�
 - **HARD에서 U는 baseline보다 나아지지 않았습니다(D1).** 공통 학습률 2e-4에서 U는 ResNet50과 강한 증강을 쓰고도 겨냥 방향 오류가 baseline과 실질적으로 같았습니다. 반면 T는 baseline보다 1,000장당 21.24건 덜 틀렸습니다.
 - **EASY · MID에서는 오히려 U가 겨냥 방향에서 오류를 더 적게 냈습니다(H1, 가설과 반대)**. MID에서는 전체 정확도도 U가 더 높았습니다. 반면 EASY에서 U는 cat · dog를 not으로 덜 놓친 대신 not을 cat · dog로 착각하는 오류가 더 많아 모든 오류를 합치면 T가 덜 틀렸습니다(정확도 T +0.54%p).
 
+<br>
+
 **진단이 맞았는지 확인 (D3)**
 
 HARD에서 규칙 D를 통해 "baseline이 not 쪽으로 치우쳐 답한 게 아니라, **cat · dog와 not을 구분하는 능력 자체가 부족하다**"고 진단해 백본을 바꿨습니다. 이 진단이 test에서도 맞는지 확인하기 위해 baseline의 validation에서 not 판정 기준을 가장 좋게 옮기는 보정값을 고른 뒤 test에 그대로 적용해 봤습니다. 그 결과 **macro-F1의 변화 폭은 세 난이도 모두 0.005 미만이었습니다**(EASY +0.0011 · MID −0.0011 · HARD +0.0000). 판정 기준만 옮겨서는 해결되지 않는다는 것을 의미하고 **백본을 바꿔야 한다는 진단이 test에서도 맞았음을 확인**했습니다.
@@ -314,7 +316,9 @@ HARD에서 규칙 D를 통해 "baseline이 not 쪽으로 치우쳐 답한 게 �
 
 HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다. 먼저 백본 × 처방 6칸의 결과입니다.
 
-<img width="700" alt="fig05_hard_factorial" src="https://github.com/user-attachments/assets/d4ce8dc8-412a-4f23-8c2b-ccd5039fbb82" />
+<img width="900" alt="fig05_hard_factorial (1)" src="https://github.com/user-attachments/assets/88937a4c-a8d7-461d-8645-1d8f3d94fd3e" />
+
+<br>
 
 | 겨냥 방향 오류 (/1,000) | ResNet18 | ResNet50 | EfficientNet-B0 |
 |---|---:|---:|---:|
