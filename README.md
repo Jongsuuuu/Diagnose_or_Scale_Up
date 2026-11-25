@@ -493,9 +493,33 @@ HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다.
 
 ## 8. 실행 방법
 
-- **환경**: Google Colab · Python 3.13 · PyTorch 2.11 · torchvision 0.26
-- **경로**: `dataset.zip`을 `/content/drive/MyDrive/DiagnoseOrScaleUp/`에 두면 결과가 같은 폴더의 `experiments_full/`과 `report_bundle.zip`에 저장됩니다.
-- **순서**: `SMOKE = True`로 01 → 04를 빠르게 점검한 뒤, `SMOKE = False`로 01 → 02 → 03 → 04를 실행합니다. 세션이 끊기면 같은 노트북을 다시 실행하면 체크포인트에서 이어집니다. 01 실행 뒤에는 공통 엔진 셀을 수정하지 않습니다(잠금 해시가 맞지 않아 멈춤).
+### 환경
+- Google Colab · Python 3.13 · PyTorch 2.11 (CUDA 13.0) · torchvision 0.26
+- 노트북을 실행할 때마다 환경 정보(라이브러리 버전, GPU, 엔진 해시)가 `experiments_full/_shared/environment_log.jsonl`에 기록됩니다.
+
+### 준비
+- Google Drive의 `/content/drive/MyDrive/DiagnoseOrScaleUp/` 폴더에 `dataset.zip`을 넣습니다.
+- 다른 위치를 쓰려면 각 노트북 첫 셀의 `PROJECT_DIR`만 바꾸면 됩니다.
+
+### 실행 순서
+1. **점검 실행**: 첫 셀에서 `SMOKE = True`로 두고 01 → 04를 실행합니다. 작은 이미지와 적은 seed로 전체 코드 경로를 빠르게 확인하며 결과는 본 실험과 섞이지 않도록 `experiments_full_smoke/`에 따로 저장됩니다.
+2. **본 실험**: `SMOKE = False`로 바꾸고 01 → 02 → 03 → 04를 순서대로 실행합니다. 각 단계는 앞 단계의 잠금 파일을 확인한 뒤에만 실행됩니다.
+
+| 노트북 | 하는 일 |
+|---|---|
+| 01 | 중복 검사 · train/validation 분할 · baseline 학습과 진단 |
+| 02 | T/U 처방 생성 · epoch와 학습률 보정 · 가설과 판정 기준 사전등록 |
+| 03 | 모든 arm의 lockstep 확증 학습 · 학습 검증 |
+| 04 | test 1회 평가 · 가설 판정 · 최종 보고서와 결과 묶음 생성 |
+
+### 주의할 점
+- **세션이 끊기면** 같은 노트북을 처음부터 다시 실행하면 됩니다. 끝난 run은 건너뛰고, 진행 중이던 run은 가장 최근 체크포인트에서 검증을 거쳐 이어집니다. 특정 run을 처음부터 다시 학습하려면 `FORCE_RESTART`에 run 이름을 넣습니다(예: `{'conf_hard_s43'}`).
+- **엔진 셀(E1~E7)은 수정하지 않습니다.** 네 노트북에 똑같이 들어 있는 공통 코드로, 원문 해시가 잠금 파일에 기록됩니다. 01 실행 뒤에 한 글자라도 바꾸면 해시가 맞지 않아 다음 단계가 멈춥니다.
+- **test는 04에서 한 번만 열립니다.** 04를 다시 실행하면 모델을 다시 돌리지 않고, 저장된 예측을 해시로 확인한 뒤 읽어 들입니다.
+
+### 결과물
+- `experiments_full/`: 단계별 잠금 파일, 비교 CSV, 그림, 최종 보고서(`04_test_and_hypotheses/04_FINAL_REPORT.md`)가 저장됩니다.
+- `report_bundle.zip`: `experiments_full/`에서 모델 가중치 · 체크포인트 · 이미지 캐시를 뺀 결과 파일 묶음입니다.
 
 ```text
 .
@@ -504,7 +528,12 @@ HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다.
 ├── 03_confirmatory_training.ipynb          # lockstep 확증 학습 · 학습 검증
 ├── 04_test_and_hypotheses.ipynb            # test 1회 평가 · 가설 판정
 ├── images/                                 # README 그림
-└── experiments_full/                       # 결과 묶음 (잠금 파일 · 비교 CSV · 최종 보고서)
+└── experiments_full/                       # 결과 묶음
+    ├── _shared/                            # 데이터 감사 · 분할 · test 접근 기록 · 환경 기록
+    ├── 01_protocol_data_diagnosis/         # 진단 잠금 · 진단표
+    ├── 02_prescriptions_preregistration/   # 처방 · epoch/학습률 잠금 · 사전등록
+    ├── 03_confirmatory_training/           # 학습 기록 · 학습 검증 · 수렴 점검
+    └── 04_test_and_hypotheses/             # test 예측 · 비교 CSV · 판정 잠금 · 최종 보고서
 ```
 
 ---
