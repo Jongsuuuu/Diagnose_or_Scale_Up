@@ -493,7 +493,7 @@ HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다.
 
 ## 8. 실행 방법
 
-- **환경**: Google Colab (Tesla T4) · Python 3.13 · PyTorch 2.11 · torchvision 0.26
+- **환경**: Google Colab · Python 3.13 · PyTorch 2.11 · torchvision 0.26
 - **경로**: `dataset.zip`을 `/content/drive/MyDrive/DiagnoseOrScaleUp/`에 두면 결과가 같은 폴더의 `experiments_full/`과 `report_bundle.zip`에 저장됩니다.
 - **순서**: `SMOKE = True`로 01 → 04를 빠르게 점검한 뒤, `SMOKE = False`로 01 → 02 → 03 → 04를 실행합니다. 세션이 끊기면 같은 노트북을 다시 실행하면 체크포인트에서 이어집니다. 01 실행 뒤에는 공통 엔진 셀을 수정하지 않습니다(잠금 해시가 맞지 않아 멈춤).
 
