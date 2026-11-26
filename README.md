@@ -489,8 +489,6 @@ HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다.
 
 ---
 
-📌
-
 ## 8. 실행 방법
 
 ### 환경
@@ -512,23 +510,25 @@ HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다.
 | 03 | 모든 arm의 lockstep 확증 학습 · 학습 검증 |
 | 04 | test 1회 평가 · 가설 판정 · 최종 보고서와 결과 묶음 생성 |
 
-### 주의할 점
-- **세션이 끊기면** 같은 노트북을 처음부터 다시 실행하면 됩니다. 끝난 run은 건너뛰고, 진행 중이던 run은 가장 최근 체크포인트에서 검증을 거쳐 이어집니다. 특정 run을 처음부터 다시 학습하려면 `FORCE_RESTART`에 run 이름을 넣습니다(예: `{'conf_hard_s43'}`).
-- **엔진 셀(E1~E7)은 수정하지 않습니다.** 네 노트북에 똑같이 들어 있는 공통 코드로, 원문 해시가 잠금 파일에 기록됩니다. 01 실행 뒤에 한 글자라도 바꾸면 해시가 맞지 않아 다음 단계가 멈춥니다.
-- **test는 04에서 한 번만 열립니다.** 04를 다시 실행하면 모델을 다시 돌리지 않고, 저장된 예측을 해시로 확인한 뒤 읽어 들입니다.
-
 ### 결과물
 - `experiments_full/`: 단계별 잠금 파일, 비교 CSV, 그림, 최종 보고서(`04_test_and_hypotheses/04_FINAL_REPORT.md`)가 저장됩니다.
 - `report_bundle.zip`: `experiments_full/`에서 모델 가중치 · 체크포인트 · 이미지 캐시를 뺀 결과 파일 묶음입니다.
 
+> `experiments_full/`은 코드 01 실행부터 단계별로 생성
+> 
+> `report_bundle.zip`은 코드 04 실행 시 생성 
+
+### 폴더 구조
+
 ```text
-.
+/content/drive/MyDrive/DiagnoseOrScaleUp/
 ├── 01_protocol_data_diagnosis.ipynb        # 중복 검사 · 분할 · 진단
 ├── 02_prescriptions_preregistration.ipynb  # T/U 처방 · epoch · 학습률 · 사전등록
 ├── 03_confirmatory_training.ipynb          # lockstep 확증 학습 · 학습 검증
 ├── 04_test_and_hypotheses.ipynb            # test 1회 평가 · 가설 판정
-├── images/                                 # README 그림
-└── experiments_full/                       # 결과 묶음
+├── dataset.zip                             # 입력 데이터
+├── report_bundle.zip                       # 결과 파일 묶음
+└── experiments_full/                       # 결과 폴더
     ├── _shared/                            # 데이터 감사 · 분할 · test 접근 기록 · 환경 기록
     ├── 01_protocol_data_diagnosis/         # 진단 잠금 · 진단표
     ├── 02_prescriptions_preregistration/   # 처방 · epoch/학습률 잠금 · 사전등록
