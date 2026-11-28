@@ -496,6 +496,7 @@ HARD에서 T가 이긴 이유를 3.5의 요인 설계로 나눠 봤습니다.
 - 노트북을 실행할 때마다 환경 정보(라이브러리 버전, GPU, 엔진 해시)가 `experiments_full/_shared/environment_log.jsonl`에 기록됩니다.
 
 ### 준비
+- 데이터셋(`dataset.zip`, 87.9MB)은 용량이 커서 저장소에 포함하지 않았습니다. [여기](https://github.com/Jongsuuuu/Diagnose_or_Scale_Up/releases/download/dataset/dataset.zip)에서 내려받아야 합니다.
 - Google Drive의 `/content/drive/MyDrive/DiagnoseOrScaleUp/` 폴더에 `dataset.zip`을 넣습니다.
 - 다른 위치를 쓰려면 각 노트북 첫 셀의 `PROJECT_DIR`만 바꾸면 됩니다.
 
